@@ -119,6 +119,17 @@ def convolve_with_gaussian(x, y, sigma):
     y_conv = (y_conv - min(y_conv)) / (max(y_conv) - min(y_conv))
     return y_conv
 
+def get_gaussian_sample(x, y, x0, sigma, crop_sigma=None):
+    '''Return element-wise multiplication of your sample data with a gaussian of width sigma centered at x0'''
+    if crop_sigma:
+        idx = np.where(np.abs(x - x0) <= crop_sigma * sigma)
+        gaussian_x = x[idx]
+        gaussian_y = y[idx]
+    else:
+        gaussian_x = x.copy()
+        gaussian_y = y.copy()
+    gaussian = np.exp(-((gaussian_x - x0)/sigma) ** 2 / 2)
+    return gaussian_x, np.multiply(gaussian_y, gaussian)
 
 def name_tone(tone):
     letter_names = [ 'C', 'C#/Db', 'D', 'D#/Eb', 'E', 'F', 'F#/Gb', 'G', 'G#/Ab', 'A', 'A#/Bb', 'B' ]
@@ -149,7 +160,7 @@ def name_tone(tone):
     tone_name_dict = {
         "tone_name": letter_name,
         "octave": octave,
-        "offset_cents": tone_cents,
+        "cents": tone_cents,
     }
     return tone_name_dict
 
@@ -171,9 +182,34 @@ def standardize(y):
 
 
 def get_peak_frequencies(xf, yf):
+    '''Get idxs of peak frequencies. If top=0, return all peak frequencies'''
     yf = standardize(yf)
     
-    return
+    # Mark the top 5 peaks in sample spectrum
+    peaks, props = find_peaks(np.abs(yf), prominence=0.5)
+    proms = props['prominences']
+    sort_idx = np.flip(np.argsort(proms))
+    peaks, frequencies = peaks[sort_idx], xf[peaks[sort_idx]]
+
+    # Ignore (remove) negative frequency repeats
+    pos_idx = np.where(frequencies > 0)
+    peaks, frequencies = peaks[pos_idx], frequencies[pos_idx]
+
+    peak_frequencies = np.array([frequencies[0]])
+    peak_idxs = np.array([peaks[0]])
+
+    # Remove smaller peaks less than half-tone away from a larger peak
+    halfstep_downup = [2 ** (i/12.) for i in [-1, 1]]
+    for peak, frequency in zip(peaks[1:], frequencies[1:]):
+        peak_ratios = peak_frequencies / frequency
+        close_peaks = np.where(
+            (peak_ratios > halfstep_downup[0]) & (peak_ratios < halfstep_downup[1])
+        )[0]
+        if len(close_peaks) == 0:
+            peak_frequencies = np.append(peak_frequencies, frequency)
+            peak_idxs = np.append(peak_idxs, peak)
+
+    return peak_idxs
 
 def wrap_spectrum(xf, yf, xrange=[]):
     xrange = [0, 1000]
@@ -197,6 +233,7 @@ def wrap_spectrum(xf, yf, xrange=[]):
 
     peak_frequencies = np.array([frequencies[0]])
     peak_idxs = np.array([peaks[0]])
+
 
     half_down, half_up = [2 ** (i / 12.) for i in [-1, 1]]
     for peak, frequency in zip(peaks[1:], frequencies[1:]):

@@ -2,48 +2,86 @@ import scipy
 import numpy as np
 import matplotlib.pyplot as plt
 import tools
+from scipy.signal import find_peaks
 
+
+# Import the wavfile data and metadata
 wav_filename = r"C:\Users\erica\OneDrive\Desktop\repos\music\Super Mario Bros. Theme  but its in a minor key.wav"
+sample_window_seconds = [0.838, 25]
+
 sample_input = scipy.io.wavfile.read(wav_filename)
 sample_rate = sample_input[0]
-# Just get a single channel
-raw_sample_data = [x[0] for x in sample_input[1]]
+sample_data_channels = sample_input[1]
+sample_data = sample_data_channels[:, 0] # Only single-channel data supported
+idx_window = [int(sample_window_seconds[i] * sample_rate) for i in range(2)]
+sample_data = np.array(sample_data[idx_window[0]:idx_window[1]])
+sample_time = np.arange(len(sample_data)) / sample_rate
+sample_fft = tools.get_fft(sample_time, sample_data)
+xf, yf = sample_fft[0], sample_fft[1]
+sample_time_fft, sample_data_fft = tools.get_fft(sample_time, sample_data)
 
-dt = 1 / sample_rate
-N = len(raw_sample_data)
-raw_sample_time = np.arange(N) * dt
-max_amp = np.max(raw_sample_data)
-
-# Crop wav file to first x seconds
-song_window_seconds = [0.838, 25]
-idx_window = [int(song_window_seconds[i] * sample_rate) for i in range(2)]
-
-sample_data = np.array(raw_sample_data[idx_window[0]:idx_window[1]])
-sample_time = raw_sample_time[idx_window[0]:idx_window[1]]
 
 dx = np.mean([sample_time[i+1] - sample_time[i] for i in range(len(sample_time)-2)])
 fontsz = 8
 
 num_samples = 3
+
 fig, axs = plt.subplots(num_samples, 2)
 axs = axs.flatten()
-# Take 3 random 1-second samples
-sample_seconds = 0.5
-for i, idx_start in enumerate(np.random.randint(len(sample_data) - int(sample_seconds/dx), size=num_samples)):
-    idx_end = idx_start + int(sample_seconds / dx)
 
-    x, y = sample_time[idx_start:idx_end], sample_data[idx_start:idx_end]
+# Take 3 random short samples
+sample_duration_seconds = 0.2
+sample_duration_num = int(sample_duration_seconds / dx)
+random_sample_idxs = np.random.randint(len(sample_data) - sample_duration_num, size=num_samples)
+for i, idx_start in enumerate(random_sample_idxs):
+    
+    # To avoid distontinuous data, take a sample using gaussian distribution
+    gaussian_width = 0.5 * sample_duration_seconds
+    gaussian_center = sample_time[idx_start]
+    random_sample_time, random_sample_data = tools.get_gaussian_sample(
+        sample_time, sample_data,
+        gaussian_center, gaussian_width,
+        crop_sigma = 3.0,
+    )
+    
+    xf = np.fft.fftfreq(len(random_sample_data), d=dx)
+    yf = np.fft.fft(random_sample_data)
+    yf = tools.standardize(yf)
+    peak_idxs = tools.get_peak_frequencies(xf, yf)
+    peak_idxs = peak_idxs[:5]
+    peak_freqs = xf[peak_idxs]
 
-    dx = np.mean([x[i+1] - x[i] for i in range(len(x)-1)])
-    yf = np.fft.fft(y)
-    xf = np.fft.fftfreq(len(y), d=dx)
-
+    print(f"Random sample {i} peaks:")
+    for peak_freq in peak_freqs:
+        name = tools.name_tone(peak_freq)
+        print(f"  frequency: {peak_freq}, name: {name['tone_name']}{name['octave']}, {round(name['cents'])} cents")
 
     plt_idx = i * 2
     ax = axs[plt_idx]
-    ax.plot(x, tools.standardize(y), 'b', alpha=1.0)
-    ax.set_title(f'{round(sample_time[idx_start],2)} - {round(sample_time[idx_end],2)} s', fontsize=fontsz)
+    ax.plot(random_sample_time, tools.standardize(random_sample_data), 'b', alpha=0.8)
+    ax.set_title(f'{sample_duration_seconds}s gaussian sample at t={round(sample_time[idx_start],2)}s', fontsize=fontsz)
     ax.tick_params(axis='both', labelsize=fontsz)
+
+    ax = axs[plt_idx + 1]
+    ax.plot(xf, yf.real, 'r')
+    ax.plot(xf, yf.imag, 'b')
+    ax.plot(xf, np.abs(yf), 'k')
+    ax.plot(xf[peak_idxs], np.abs(yf)[peak_idxs], 'gx')
+    ax.set_xlim([0, 2000])
+    ax.set_title('fft', fontsize=fontsz)
+    ax.tick_params(axis='both', labelsize=fontsz)
+    # ax.legend(fontsize=fontsz)
+
+    write_wavfilename = f'random_sample_{i}.wav'
+    scipy.io.wavfile.write(write_wavfilename, sample_rate, random_sample_data.astype(np.int16))
+    print(f"Saved {write_wavfilename}")
+
+
+
+
+plt.show()
+
+
 
     # Filter out some frequencies
     # yf_filtered = yf.copy()
@@ -53,13 +91,6 @@ for i, idx_start in enumerate(np.random.randint(len(sample_data) - int(sample_se
     # y_filtered_write = np.real(y_filtered / max(y_filtered) * max(sample_data))
     # ax.plot(x, tools.standardize(y_filtered), 'b', alpha=0.5)
 
-    ax = axs[plt_idx + 1]
-    ax.plot(xf, tools.standardize(yf), 'r')
-    ax.set_xlim([0, 2000])
-    ax.set_title('fft', fontsize=fontsz)
-    ax.tick_params(axis='both', labelsize=fontsz)
-
-    scipy.io.wavfile.write(f'random_sample_{i}.wav', sample_rate, y.astype(np.int16))
 
     # ax.plot(xf, tools.standardize(yf_filtered), 'r', linestyle='dashed')
     # y_bass_write = np.real(y_filtered) / max(np.real(y_filtered)) * max(sample_data)
@@ -69,7 +100,7 @@ for i, idx_start in enumerate(np.random.randint(len(sample_data) - int(sample_se
 # plt.plot(y, 'k', alpha=0.5)
 # plt.plot(y_bass_write, 'r', alpha=0.5)
 
-plt.show()
+
 
 # # Search for a section that repeats
 # min_div_seconds, max_div_seconds = [5, 7]
