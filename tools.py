@@ -2,11 +2,27 @@ import numpy as np
 import scipy 
 import matplotlib.pyplot as plt
 from scipy.signal import find_peaks
-
+from PIL import Image
+import os
 
 
 HALFSTEP_RATIO = 2. ** (1. / 12)
 
+
+def save_gif_from_images(image_files, frame_duration_ms=1000, save_filename='asdf.gif'):
+    images = []
+    for image_file in image_files:
+        img = Image.open(image_file)
+        images.append(img)
+    
+    images[0].save(
+        save_filename,
+        save_all=True,
+        append_images=images[1:],
+        duration=frame_duration_ms,
+        loop=0,
+    )
+    print(f"Saved {save_filename}")
 
 
 def get_fft(x, y, comp=''):
@@ -111,6 +127,18 @@ def wrap_tone(tone):
     return tone, octave
 
 
+def frequency_to_midi(frequencies:list, return_float=False):
+    '''Create dict of frequency Hz to midi note number.
+    Returns a float to encode out-of-tuneness'''
+    # 440Hz is 69(.0)
+    midi_nums = [
+        69.0 + (12.0 * np.log2(freq / 440.))
+        for freq in frequencies
+    ]
+    if not return_float:
+        midi_nums = [int(round(x)) for x in midi_nums]
+    return midi_nums
+
 def convolve_with_gaussian(x, y, sigma):
     dx = np.mean([x[i+1] - x[i] for i in range(len(x)-2)])
     gx = np.arange(-3*sigma, 3*sigma, dx)
@@ -126,10 +154,13 @@ def get_gaussian_sample(x, y, x0, sigma, crop_sigma=None):
         gaussian_x = x[idx]
         gaussian_y = y[idx]
     else:
+        idx = np.where(np.abs(x) >= 0)
         gaussian_x = x.copy()
         gaussian_y = y.copy()
     gaussian = np.exp(-((gaussian_x - x0)/sigma) ** 2 / 2)
-    return gaussian_x, np.multiply(gaussian_y, gaussian)
+    return idx, np.multiply(gaussian_y, gaussian)
+
+
 
 def name_tone(tone):
     letter_names = [ 'C', 'C#/Db', 'D', 'D#/Eb', 'E', 'F', 'F#/Gb', 'G', 'G#/Ab', 'A', 'A#/Bb', 'B' ]
@@ -153,14 +184,24 @@ def name_tone(tone):
         octave += 1
     # print("tone idx:",tone_idx)
     # print("len letter names:",len(letter_names))
+    
+    # Get the Circle of Fifths number (assume major)
+    if tone_idx % 2 == 0:
+        fifths_num = tone_idx
+    else:
+        fifths_num = tone_idx + 6
+    if fifths_num > 6:
+        fifths_num -= 12
 
     letter_name = letter_names[tone_idx]
     tone_name = f"{letter_name}{octave} {round(tone_cents)} cents"
     # print(tone_name)
     tone_name_dict = {
+        "frequency": tone,
         "tone_name": letter_name,
         "octave": octave,
         "cents": tone_cents,
+        "fifths": fifths_num,
     }
     return tone_name_dict
 
@@ -183,10 +224,12 @@ def standardize(y):
 
 def get_peak_frequencies(xf, yf):
     '''Get idxs of peak frequencies. If top=0, return all peak frequencies'''
-    yf = standardize(yf)
+    # yf = standardize(yf)
     
     # Mark the top 5 peaks in sample spectrum
-    peaks, props = find_peaks(np.abs(yf), prominence=0.5)
+    peaks, props = find_peaks(
+        standardize(np.abs(yf)), prominence=0.5
+    )
     proms = props['prominences']
     sort_idx = np.flip(np.argsort(proms))
     peaks, frequencies = peaks[sort_idx], xf[peaks[sort_idx]]
@@ -208,8 +251,22 @@ def get_peak_frequencies(xf, yf):
         if len(close_peaks) == 0:
             peak_frequencies = np.append(peak_frequencies, frequency)
             peak_idxs = np.append(peak_idxs, peak)
+    
+    # Calculate power of each peak
+    powers = []
+    N = min([len(peaks)-1, 6])
+    for peak, frequency in zip(peaks[:N], frequencies[:N]):
+        # print("Peak, frequency:",peak, frequency)
+        peak_power_idx = np.where(
+            (xf >= frequency - frequency * (2 ** (-1. / 24))) & (xf < frequency + frequency * (2 ** (1. / 24)))
+        )
+        # print("Peak power idx:",peak_power_idx)
+        peak_power = np.sum(np.abs(yf)[peak_power_idx])
+        # print("peak power: ",peak_power)
+        # print(f"peak power db: {10 * np.log(peak_power)}")
+        powers.append(peak_power)
 
-    return peak_idxs
+    return peak_idxs, powers
 
 def wrap_spectrum(xf, yf, xrange=[]):
     xrange = [0, 1000]
