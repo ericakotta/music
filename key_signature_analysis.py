@@ -28,6 +28,7 @@ def get_key_signature(wav_filename, display=True):
     '''
     Input piano audio data (.wav file) and return a matching key signature
     '''
+    print(f"Performing key signature analysis of {wav_filename}...")
 
       # Import the wavfile data and metadata
     sample_input = scipy.io.wavfile.read(wav_filename)
@@ -36,9 +37,9 @@ def get_key_signature(wav_filename, display=True):
     sample_data = sample_data_channels[:, 0] # Only single-channel data supported
     sample_time = np.arange(len(sample_data)) / sample_rate
     
-    sample_fft = tools.get_fft(sample_time, sample_data)
+    sample_fft = tools.get_sorted_fft(sample_time, sample_data)
     xf, yf = sample_fft[0], sample_fft[1]
-    sample_time_fft, sample_data_fft = tools.get_fft(sample_time, sample_data)
+    sample_time_fft, sample_data_fft = tools.get_sorted_fft(sample_time, sample_data)
 
     # Zoom in to middle octave
     zoom_frequencies = [440.0 * (2 ** (i / 12.)) for i in [-9.0, 3.0]]

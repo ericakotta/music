@@ -9,12 +9,74 @@ import os
 HALFSTEP_RATIO = 2. ** (1. / 12)
 
 
-def save_gif_from_images(image_files, frame_duration_ms=1000, save_filename='asdf.gif'):
+
+def preprocess_audio_data(wav_filename, crop_margin=None):
+    '''Import data in a .wav file and return np arrays'''
+    sample_input = scipy.io.wavfile.read(wav_filename)
+    sample_rate = sample_input[0]
+    sample_data_channels = sample_input[1]
+    sample_data = sample_data_channels[:, 0] # Only single-channel data supported
+    sample_time = np.arange(len(sample_data)) / sample_rate
+    if crop_margin:
+        idx = np.where((sample_time >= crop_margin[0]) & (sample_time < crop_margin[1]))
+        sample_time, sample_data = sample_time[idx], sample_data[idx]
+        sample_time = sample_time - sample_time[0]
+    return sample_time, sample_data
+
+
+def save_gif_from_plots(fft_x_series, fft_y_series, series_times, save_frames_folderpath, plot_ref_freqs=[], frame_duration_ms=1000, save_filename=''):
+    exist_files = [f"{save_frames_folderpath}\\{x}" for x in os.listdir(save_frames_folderpath)]
+    if len(exist_files) > 0:
+        # input(f"Found existing images in {save_frames_folderpath}. Press Enter to delete and continue: ")
+        for exist_file in exist_files:
+            os.remove(exist_file)
+                   
+    print(f"Saving gif frame images to {save_frames_folderpath}...")
+    for i, (fft_x, fft_y) in enumerate(zip(fft_x_series, fft_y_series)):
+        fig, ax = plt.subplots()
+        fft_y = fft_y / max(fft_y) 
+        ax.plot(fft_x, fft_y)
+        for x in plot_ref_freqs:
+            ax.plot([x] * 2, [min(fft_y), max(fft_y)], 'r', alpha=0.5, linewidth=0.5)
+        ax.set_ylim([0, 1])
+        ax.set_xlim([0, 1000])
+        frame_idx_str = '0' * (5 - len(str(i))) + str(i)
+        save_framepath = os.path.join(save_frames_folderpath, f'frame_{frame_idx_str}.png')
+        ax.set_title(f't={round(series_times[i],2)}')
+        plt.savefig(save_framepath)
+    print(f"Saved {len(fft_y_series)} images.")
+    images_lst = [f'{save_frames_folderpath}\\{x}' for x in os.listdir(save_frames_folderpath)]
+    '''Save a gif from list of image paths'''
+    images = []
+    for image_file in images_lst:
+        img = Image.open(image_file)
+        images.append(img)
+    if save_filename == '':
+        save_filename = 'spectra.gif'
+
+    images[0].save(
+        save_filename,
+        save_all=True,
+        append_images=images[1:],
+        duration=frame_duration_ms,
+        loop=0,
+    )
+    # Gif saved, deleting image files
+    # for image_file in images_lst:
+    #     os.remove(image_file)
+    print(f"Saved {save_filename}.")
+
+
+def save_gif_from_images(image_files, frame_duration_ms=1000, save_filename=''):
+    '''Save a gif from list of image paths'''
     images = []
     for image_file in image_files:
         img = Image.open(image_file)
         images.append(img)
-    
+
+    if save_filename == '':
+        save_filename = f'{image_files[0]}.gif'
+
     images[0].save(
         save_filename,
         save_all=True,
@@ -25,8 +87,9 @@ def save_gif_from_images(image_files, frame_duration_ms=1000, save_filename='asd
     print(f"Saved {save_filename}")
 
 
-def get_fft(x, y, comp=''):
-    dx = np.mean([x[i+1] - x[i] for i in range(len(x)-1)])
+def get_sorted_fft(x, y, comp=''):
+    '''Get specified component of fft in fft-x order'''
+    dx = np.abs(np.mean([x[i+1] - x[i] for i in range(len(x)-1)]))
     yf = np.fft.fft(y)
     xf = np.fft.fftfreq(len(y), d=dx)
     idx = np.argsort(xf)
@@ -127,6 +190,13 @@ def wrap_tone(tone):
     return tone, octave
 
 
+def midi_to_frequency(midis:list):
+    frequencies = [
+        440. * (2 ** (( m - 69 ) / 12.0 )) for m in midis
+    ]
+    return frequencies
+
+
 def frequency_to_midi(frequencies:list, return_float=False):
     '''Create dict of frequency Hz to midi note number.
     Returns a float to encode out-of-tuneness'''
@@ -140,11 +210,15 @@ def frequency_to_midi(frequencies:list, return_float=False):
     return midi_nums
 
 def convolve_with_gaussian(x, y, sigma):
-    dx = np.mean([x[i+1] - x[i] for i in range(len(x)-2)])
-    gx = np.arange(-3*sigma, 3*sigma, dx)
-    gaussian = np.exp(-(gx/sigma)**2/2)
+    '''Broaden a curve using gaussian of width sigma.
+    Make sure x is time-ordered'''
+    dx = np.mean([np.abs(x[i+1] - x[i]) for i in range(len(x)-2)])
+    # print(f"dx: {dx}")
+    gx = np.arange(-5 * sigma, 5 * sigma, dx)
+    # print("Len gx:",len(gx))
+    gaussian = np.exp(-(gx / sigma) ** 2 / 2)
     y_conv = np.convolve(y, gaussian, mode="same")
-    y_conv = (y_conv - min(y_conv)) / (max(y_conv) - min(y_conv))
+    # y_conv = (y_conv - min(y_conv)) / (max(y_conv) - min(y_conv))
     return y_conv
 
 def get_gaussian_sample(x, y, x0, sigma, crop_sigma=None):
