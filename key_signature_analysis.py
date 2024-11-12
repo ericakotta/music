@@ -16,11 +16,11 @@ def parse_args(args):
         default="Super Mario Bros. Theme  but its in a minor key.wav",
         help='Name of .wav file (in current directory) to analyze key signature. If not specified, searches directory and uses first .wav file found.'
     )
-    arg_parser.add_argument(
-        '--display',
-        action='store_true',
-        help='Plot the results in summary figure.'
-    )
+    # arg_parser.add_argument(
+    #     '--display',
+    #     action='store_true',
+    #     help='Plot the results in summary figure.'
+    # )
     return arg_parser.parse_args()
 
 
@@ -30,7 +30,7 @@ def get_key_signature(wav_filename, display=True):
     '''
     print(f"Performing key signature analysis of {wav_filename}...")
 
-      # Import the wavfile data and metadata
+    # Import the wavfile data and metadata
     sample_input = scipy.io.wavfile.read(wav_filename)
     sample_rate = sample_input[0]
     sample_data_channels = sample_input[1]
@@ -56,16 +56,19 @@ def get_key_signature(wav_filename, display=True):
         key_tones.extend([tone * (2 ** (i / (12 * key_steps))) for i in range(key_steps)])
 
     # Convolute the measured spectrum for better alignment
-    meas_yf = (plt_yf - min(plt_yf)) / (max(plt_yf) - min(plt_yf))
+    meas_yf = tools.normalize(plt_yf)
     conv_sigma = 0.2
     meas_yf_conv = tools.convolve_with_gaussian(plt_xf, meas_yf, sigma=conv_sigma)
+    meas_yf_conv = tools.normalize(meas_yf_conv)
     scores = []
     # TODO: Characterize width of measured spectral peak widths and use that for sim_width
     sim_width = 2
+    print(f"Convoluting simulated spectra with sim_width={sim_width}. You may have to adjust this value.")
     for key_tone in key_tones:
         sim_yf = tools.simulate_scale_spectrum(plt_xf, tone=key_tone, width=sim_width)
         score = np.sum(np.multiply(meas_yf_conv, sim_yf)**2)
         scores.append(score)
+
     # Find the tone of best matching simulated spectrum
     best_match_idx = scores.index(max(scores))
     best_match_tone = key_tones[best_match_idx]
@@ -91,9 +94,9 @@ def get_key_signature(wav_filename, display=True):
         ax.tick_params(axis='both', labelsize=fontsz)
 
         ax = axs[1]
-        ax.plot(sample_time_fft, sample_data_fft.real, 'b', label='real')
-        ax.plot(sample_time_fft, sample_data_fft.imag, 'r', label='imag')
-        ax.plot(sample_time_fft, np.abs(sample_data_fft), 'k', label='abs')
+        ax.plot(sample_time_fft, sample_data_fft.real, 'b', label='real', alpha=0.5)
+        ax.plot(sample_time_fft, sample_data_fft.imag, 'r', label='imag', alpha=0.5)
+        ax.plot(sample_time_fft, np.abs(sample_data_fft), 'k', label='abs', alpha=0.5)
         ax.legend(loc='upper right', fontsize=fontsz)
         ax.set_title('Sampled data fft ', fontsize=fontsz)
         ax.set_xlabel('frequency (Hz)', fontsize=fontsz)
@@ -129,4 +132,4 @@ def get_key_signature(wav_filename, display=True):
 
 if __name__ == '__main__':
     args = parse_args(sys.argv[1:])
-    get_key_signature(args.wav_file, display=args.display)
+    get_key_signature(args.wav_file, display=True)

@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import tools
 
-wav_filename = r"C:\Users\erica\OneDrive\Desktop\repos\music\Super Mario Bros. Theme  but its in a minor key.wav"
+wav_filename = r"Super Mario Bros. Theme  but its in a minor key.wav"
 sample_input = scipy.io.wavfile.read(wav_filename)
 sample_rate = sample_input[0]
 # Just get a single channel

@@ -19,7 +19,8 @@ import tools
 
 
 # Import the wavfile data and metadata
-wav_filename = r"C:\Users\erica\OneDrive\Desktop\repos\music\Super Mario Bros. Theme  but its in a minor key.wav"
+# wav_filename = r"C:\Users\erica\OneDrive\Desktop\repos\music\Super Mario Bros. Theme  but its in a minor key.wav"
+wav_filename = r"Super Mario Bros. Theme  but its in a minor key.wav"
 sample_window_seconds = [0.838, 25]
 
 key_fifths_idx = get_key_signature(wav_filename, display=False)['fifths']
@@ -30,10 +31,11 @@ sample_data_channels = sample_input[1]
 sample_data = sample_data_channels[:, 0] # Only single-channel data supported
 idx_window = [int(sample_window_seconds[i] * sample_rate) for i in range(2)]
 sample_data = np.array(sample_data[idx_window[0]:idx_window[1]])
+
 sample_time = np.arange(len(sample_data)) / sample_rate
-sample_fft = tools.get_fft(sample_time, sample_data)
+sample_fft = tools.get_sorted_fft(sample_time, sample_data)
 xf, yf = sample_fft[0], sample_fft[1]
-sample_time_fft, sample_data_fft = tools.get_fft(sample_time, sample_data)
+sample_time_fft, sample_data_fft = tools.get_sorted_fft(sample_time, sample_data)
 
 plot = True
 
@@ -44,9 +46,11 @@ fontsz = 8
 sample_duration_seconds = 0.25
 sample_duration_num = int(sample_duration_seconds / dx)
 
-sample_window = [0, 2] # seconds
+sample_window = [5, 6] # seconds
 sample_spacing_seconds = 0.1
-sample_freq_times = np.arange(sample_window[0], sample_window[1], sample_spacing_seconds) #np.linspace(0., 5., 20)
+sample_freq_times = np.arange(
+    sample_window[0], sample_window[1], sample_spacing_seconds
+) #np.linspace(0., 5., 20)
 sample_freqs = []
 freq_powers = []
 

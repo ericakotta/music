@@ -2,6 +2,7 @@ import scipy
 import numpy as np
 import matplotlib.pyplot as plt
 import tools
+import traceback
 from scipy.signal import find_peaks
 from key_signature_analysis import get_key_signature
 import sys
@@ -124,9 +125,9 @@ def parse_args(args):
 
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument(
-        '--wav-file',
+        'wav_file',
         type=str,
-        default="Super Mario Bros. Theme  but its in a minor key.wav",
+        # default="Super Mario Bros. Theme  but its in a minor key.wav",
         help='Name of .wav file (in current directory) to analyze key signature. If not specified, searches directory and uses first .wav file found.'
     )
     arg_parser.add_argument(
@@ -142,6 +143,7 @@ def parse_args(args):
         help='Width of each sample in seconds'
     )
     arg_parser.add_argument(
+        '-w',
         '--sample-window',
         type=float,
         nargs=2,
@@ -253,6 +255,15 @@ if __name__ == '__main__':
         beat.add_child(chord)
 
     xml_path = f'{xml_filename}.xml'
-    s.export_xml(xml_path)
-    print(f"Wrote {xml_path}")
+    try:
+        s.export_xml(xml_path)
+        print(f"Wrote {xml_path}")
+
+    except TypeError as e: # Expect a TypeError first time code is run
+        # tb_str = traceback.format_exception(type(e), e, e.__traceback__)
+        print(f"{e}"
+            "Encountered error in musescore package script when trying to write xml file (see error message above).\n"
+            "This is expected the first time you run this code.\n"
+            "Please comment out the 'if self.is_rest'... condition in chord.py \nat the location specified in the error message, save the file and try again.\n"
+        )
 

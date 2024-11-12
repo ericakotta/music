@@ -122,7 +122,7 @@ def get_midi_detections(
     plt.xlabel('Spectral amp change')
     plt.ylabel('Count')
     plt.title('Per key spectral changes')
-    plt.show()
+    plt.savefig('asdf.png')
 
     '''Analyze spectral change to determine a good threshold'''
     midi_detections = []
@@ -147,6 +147,9 @@ def get_midi_detections(
     }
 
     if create_gif_foldername:
+        if not os.path.exists(create_gif_foldername):
+            print(f"Creating temporary folder to save images for gifs: {create_gif_foldername}")
+            os.mkdir(create_gif_foldername)
         frame_duration_s = 2 * (sample_times[-1] - sample_times[0]) / (len(sample_times) - 1)
 
         save_plot_pngs(data_time, data_amp, gif_plot_data, sample_times, create_gif_foldername)
@@ -175,7 +178,7 @@ def save_plot_pngs(data_time, data_amp, gif_data, gif_data_times, save_frames_fo
     # Prepare directories
     exist_files = [f"{save_frames_folderpath}\\{x}" for x in os.listdir(save_frames_folderpath)]
     if len(exist_files) > 0:
-        print(f"Deleting {len(exist_files)} existing images in {save_frames_folderpath}.")
+        # print(f"Deleting {len(exist_files)} existing images in {save_frames_folderpath}.")
         for exist_file in exist_files:
             os.remove(exist_file)
     
