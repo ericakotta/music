@@ -10,17 +10,23 @@ HALFSTEP_RATIO = 2. ** (1. / 12)
 
 
 
-def preprocess_audio_data(wav_filename, crop_margin=None):
-    '''Import data in a .wav file and return np arrays'''
+def preprocess_audio_data(wav_filename, crop_margin=None, display=False):
+    '''Return np arrays from wav file'''
     sample_input = scipy.io.wavfile.read(wav_filename)
     sample_rate = sample_input[0]
     sample_data_channels = sample_input[1]
     sample_data = sample_data_channels[:, 0] # Only single-channel data supported
     sample_time = np.arange(len(sample_data)) / sample_rate
+    if display:
+        plt.plot(sample_time, sample_data)
     if crop_margin:
         idx = np.where((sample_time >= crop_margin[0]) & (sample_time < crop_margin[1]))
         sample_time, sample_data = sample_time[idx], sample_data[idx]
         sample_time = sample_time - sample_time[0]
+    if display:
+        plt.plot(sample_time, sample_data, 'r', alpha=0.5)
+        plt.show()
+    print(f"Sample time range: {sample_time[0]} to {sample_time[-1]}")
     return sample_time, sample_data
 
 
@@ -210,8 +216,8 @@ def frequency_to_midi(frequencies:list, return_float=False):
     return midi_nums
 
 def convolve_with_gaussian(x, y, sigma):
-    '''Broaden a curve using gaussian of width sigma.
-    Make sure x is time-ordered'''
+    '''Broaden a curve using gaussian of width sigma, in  units of x
+    Make sure x is ordered!'''
     dx = np.mean([np.abs(x[i+1] - x[i]) for i in range(len(x)-2)])
     # print(f"dx: {dx}")
     gx = np.arange(-5 * sigma, 5 * sigma, dx)
