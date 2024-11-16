@@ -125,8 +125,9 @@ def parse_args(args):
 
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument(
-        'wav_file',
+        '--wav-file',
         type=str,
+        default=None,
         # default="Super Mario Bros. Theme  but its in a minor key.wav",
         help='Name of .wav file (in current directory) to analyze key signature. If not specified, searches directory and uses first .wav file found.'
     )
@@ -141,6 +142,18 @@ def parse_args(args):
         type=float,
         default=0.07,
         help='Width of each sample in seconds'
+    )
+    arg_parser.add_argument(
+        '--start-seconds',
+        type=float,
+        default=0.0,
+        help='Sample start time. Defaults to start of wav file.',
+    )
+    arg_parser.add_argument(
+        '--end-seconds',
+        type=float,
+        default=None,
+        help='Sample end time. Defaults to end of wav file.'
     )
     arg_parser.add_argument(
         '-w',
@@ -162,22 +175,44 @@ def parse_args(args):
         default='mysheetmusic',
         help='Filename of .xml file to save'
     )
+    arg_parser.add_argument(
+        '--output-pdf-filename',
+        default='output.pdf',
+        help='Specify location to save pdf of output sheet music',
+    )
+    arg_parser.add_argument(
+        '--show',
+        default=False,
+        action='store_true',
+        help="Display plots and print extra info where available"
+    )
     return arg_parser.parse_args()
 
 
 if __name__ == '__main__':
     args = parse_args(sys.argv[1:])
     wav_filename = args.wav_file
+    if wav_filename is None:
+        files = os.listdir()
+        try:
+            wav_filename = [x for x in files if x.endswith(".wav")][0]
+        except:
+            print("Couldn't retrieve the wav file. Please specify with --wav-file.")
+            sys.exit(1)
+    elif not os.path.exists(wav_filename):
+        sys.exit("EXITING - Couldn't find the specified wav file. Make sure specified .wav file is in current working directory.")
     crop_wav_seconds = [0.838, 10]
     sample_duration = args.sample_duration
+    sample_window = [args.start_seconds, args.end_seconds]
     sample_window = args.sample_window
     sample_spacing = args.sample_spacing
     save_frames_foldername = args.frames_foldername
     xml_filename = args.xml_filename
-    create_gif_foldername = 'spectral_gif_images'
+    create_gif_foldername = 'tmp'
 
+    # crop_wav_seconds = [sample_window[0] - 0.5, sample_window[1] + 0.5]
     data_time, data_amp = tools.preprocess_audio_data(
-        wav_filename, crop_margin=crop_wav_seconds,
+        wav_filename, crop_margin=crop_wav_seconds, display=args.show
     )
     sample_times = np.arange(sample_window[0], sample_window[1], sample_spacing) #np.linspace(0., 5., 20)
 
@@ -194,7 +229,7 @@ if __name__ == '__main__':
 
     # Write it as sheet music xml
     beats_per_measure = 4
-    chords_per_beat = 4
+    chords_per_beat = 2
 
     s = Score(title=os.path.basename(wav_filename).replace('.wav',''))
     p = s.add_child(Part('piano', name='Piano'))
@@ -212,7 +247,7 @@ if __name__ == '__main__':
         print("midis:", midis)
         if idx % chords_per_measure == 0:
 
-            print(f"\nCreating new measure with 4 beats")
+            # print(f"\nCreating new measure with 4 beats")
             m = p.add_child(Measure(number=None))
             m._key = key_signature
 
@@ -223,24 +258,24 @@ if __name__ == '__main__':
 
             tv.update_beats()
             bv.update_beats()
-            print("Num beats: ",len(tv.get_children()))
+            # print("Num beats: ",len(tv.get_children()))
         if idx != 0:
             m._time._show = False
         
         treble_chord = [x for x in midis if x >= 60]
         bass_chord = [x for x in midis if x < 60]
-        print(f"  Treble, bass chords: {len(treble_chord)}, {len(bass_chord)}")
+        # print(f"  Treble, bass chords: {len(treble_chord)}, {len(bass_chord)}")
         
         beat_idx = int(
             np.floor((idx - 1) / 2) + (idx - 1) % 2
         ) % beats_per_measure
-        print(f"Idx: {idx}, Beat idx: {beat_idx}")
+        # print(f"Idx: {idx}, Beat idx: {beat_idx}")
         beat = tv.get_children()[beat_idx]
         if len(treble_chord) == 0:
             chord = Chord([0], 1. / chords_per_beat)
         else:
             chord = Chord(treble_chord, 1. / chords_per_beat)
-            print(f"Added chord to treble beat")
+            # print(f"Added chord to treble beat")
         if idx == 0:
             chord._metronome = tempo
         beat.add_child(chord)
